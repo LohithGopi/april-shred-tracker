@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 # --- CONFIG ---
-st.set_page_config(page_title="Arnold Split Basic Training", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="CUT THE FAT ", page_icon="⚡", layout="wide")
 
 # --- VEXORA CSS ---
 st.markdown("""
@@ -53,6 +53,15 @@ st.markdown("""
         color: black !important;
     }
     .hero-header h1, .hero-header p, .hero-header span { color: #1a1a1a !important; }
+    
+    /* Guidelines Box */
+    .guide-box {
+        border-left: 4px solid #FF4B2B;
+        background: rgba(255, 75, 43, 0.1);
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        border-radius: 5px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -79,60 +88,62 @@ day_idx = view_date.weekday()
 days_into_program = (view_date - start_date).days + 1
 days_left = (date(2026, 4, 1) - view_date).days
 
-# --- 1. WORKOUT DATABASE (Exact Plan) ---
+# --- 1. NEW WORKOUT DATABASE (Program Guidelines) ---
 workouts = {
-    0: ("Chest & Back (Day 1)", [
-        {"ex": "1A. Floor Press", "sets": "4 sets x 15-20 reps", "url": "uUGDRwge4F8"},
-        {"ex": "1B. DB Row", "sets": "4 sets x 15-20 reps", "url": "VKFeB7kx8fs"},
-        {"ex": "2A. Flyes", "sets": "3 sets x 15 reps", "url": "eGjt4lk6g34"},
-        {"ex": "2B. Single Row", "sets": "3 sets x 12 reps/arm", "url": "dFzUjzuW_20"},
-        {"ex": "3. Jogging", "sets": "15–20 mins post-workout", "url": "9L2b2khyfIs"}
+    0: ("Chest & Back (Width/Thickness)", [
+        {"ex": "BB Floor Press", "sets": "4 sets x 12-15", "url": "uUGDRwge4F8"},
+        {"ex": "BB Bent Over Row", "sets": "4 sets x 12-15", "url": "6TSzP8P-S0I"},
+        {"ex": "DB Floor Flys", "sets": "3 sets x 12-15", "url": "eGjt4lk6g34"},
+        {"ex": "One-Arm DB Row", "sets": "3 sets x 12/side", "url": "dFzUjzuW_20"},
+        {"ex": "Push-ups", "sets": "3 sets x Failure", "url": "IODxDxX7oi4"},
+        {"ex": "DB Pullover", "sets": "3 sets x 15", "url": "jQjWlJTK5yU"}
     ]),
-    1: ("Shoulders & Arms (Day 2)", [
-        {"ex": "1A. Overhead Press", "sets": "4 sets x 12-15 reps", "url": "HzIiNhHhhtA"},
-        {"ex": "1B. Lateral Raises", "sets": "4 sets x 15-20 reps", "url": "3VcKaXpzqRo"},
-        {"ex": "2A. Bicep Curls", "sets": "3 sets x 15 reps", "url": "ykJmrZ5v0Oo"},
-        {"ex": "2B. Tricep Ext", "sets": "3 sets x 15 reps", "url": "6SS6K3lAwWI"},
-        {"ex": "3. Hammer Curls", "sets": "3 sets to failure", "url": "7jqi2qWAUXk"}
+    1: ("Shoulders & Arms (Arnold Look)", [
+        {"ex": "Arnold Press", "sets": "4 sets x 10-12", "url": "3mlObjy7O7w"},
+        {"ex": "Side Lateral Raise", "sets": "4 sets x 15", "url": "3VcKaXpzqRo"},
+        {"ex": "BB Upright Row", "sets": "3 sets x 12", "url": "amCU-ziCQ4E"},
+        {"ex": "BB Bicep Curl", "sets": "4 sets x 10-12", "url": "kwG2ipFRgfo"},
+        {"ex": "BB Skullcrushers", "sets": "4 sets x 12", "url": "d_KZxk8_SMc"},
+        {"ex": "Hammer Curls", "sets": "3 sets x 12", "url": "7jqi2qWAUXk"},
+        {"ex": "Overhead Extension", "sets": "3 sets x 15", "url": "6SS6K3lAwWI"}
     ]),
-    2: ("Legs & Cardio (Day 3)", [
-        {"ex": "1. Jogging", "sets": "20–30 mins (Priority)", "url": "9L2b2khyfIs"},
-        {"ex": "2. Goblet Squats", "sets": "4 sets x 20 reps", "url": "MeIiGibT690"},
-        {"ex": "3. Forward Lunges", "sets": "3 sets x 12 reps/leg", "url": "QE_hU8IsS8M"},
-        {"ex": "4. RDL (DB)", "sets": "3 sets x 15 reps", "url": "jcNh17Ckjgg"}
+    2: ("Legs & Lower Back (Calorie Burn)", [
+        {"ex": "Goblet Squat", "sets": "4 sets x 15-20", "url": "MeIiGibT690"},
+        {"ex": "DB Lunges", "sets": "3 sets x 12/leg", "url": "D7KaRcUTQeE"},
+        {"ex": "Stiff-Leg Deadlift", "sets": "4 sets x 12-15", "url": "jcNh17Ckjgg"},
+        {"ex": "Calf Raises", "sets": "4 sets x 20", "url": "KxEYX_cEbFA"},
+        {"ex": "Plank", "sets": "3 sets x 45 sec", "url": "ASdvN_XEl_c"}
     ])
 }
+# Map Day 4, 5, 6
 for i in range(3, 6): workouts[i] = workouts[i-3]
-workouts[6] = ("Sunday Recovery", [])
+workouts[6] = ("Rest & Active Recovery", [])
 
-# --- 2. WARMUP DATABASE (With Videos) ---
-# Universal Starter
-universal_warmup = [
-    {"name": "Jumping Jacks (1 min)", "url": "c4DAnQ6DtF8"},
-    {"name": "Arm Circles (30 sec)", "url": "1P-y6bPg1q4"},
-    {"name": "Cat-Cow (10 reps)", "url": "kqnua4rHVVA"}
-]
-
-# Daily Specifics
-specific_warmups = {
-    0: ("Chest Focus", [
-        {"name": "Scapular Pushups", "url": "P7j98725k5c"},
-        {"name": "Doorway Stretch (Dynamic)", "url": "r2Vk6r65r1c"},
-        {"name": "Light DB Pullover", "url": "jQjWlJTK5yU"}
+# --- 2. NEW WARMUP DATABASE (Specifics) ---
+warmups = {
+    0: ("Chest Warmup", [
+        {"name": "Arm Circles (Big & Small)", "url": "1P-y6bPg1q4"},
+        {"name": "Torso Twists (30s)", "url": "q5At0q7k3F4"},
+        {"name": "Wall Slides (15 reps)", "url": "2Q2g4g0w0M0"},
+        {"name": "Cat-Cow Stretch (10 reps)", "url": "kqnua4rHVVA"},
+        {"name": "Push-up to Down Dog (10 reps)", "url": "z-tX1B3jXjo"}
     ]),
-    1: ("Shoulder Focus", [
-        {"name": "External Rotations", "url": "q5sNYB1QZsA"},
-        {"name": "Wall Slides", "url": "2Q2g4g0w0M0"},
+    1: ("Shoulder Warmup", [
+        {"name": "Shoulder Dislocations (15 reps)", "url": "02e1y2q4dKA"},
+        {"name": "Band Pull-Aparts (Simulate)", "url": "fo3d4b68J58"},
+        {"name": "Arm Cross Swings (30s)", "url": "4rGqjH1a2j0"},
         {"name": "Wrist Circles", "url": "mJ2m55f6e8U"}
     ]),
-    2: ("Leg Focus", [
-        {"name": "Bodyweight Squats (x15)", "url": "aclHkVaku9U"},
-        {"name": "Leg Swings", "url": "4K5i5J5q5r0"},
-        {"name": "World’s Greatest Stretch", "url": "-C8Q1a1q0cE"}
+    2: ("Leg Warmup", [
+        {"name": "Leg Swings (Front/Side)", "url": "4K5i5J5q5r0"},
+        {"name": "Bodyweight Squats (20 reps)", "url": "aclHkVaku9U"},
+        {"name": "Lunge with Twist (10/side)", "url": "4rGqjH1a2j0"},
+        {"name": "High Knees (30s)", "url": "Z7z7sZ3A1kU"},
+        {"name": "Glute Bridges (15 reps)", "url": "0Di1rZ7r-20"}
     ])
 }
-for i in range(3, 6): specific_warmups[i] = specific_warmups[i-3]
-specific_warmups[6] = ("Recovery Flow", [{"name": "15 Min Yoga", "url": "v7AYKMP6rOE"}])
+for i in range(3, 6): warmups[i] = warmups[i-3]
+warmups[6] = ("Recovery Flow", [{"name": "30 Min Brisk Walk", "url": "nj155mF4q_Y"}])
 
 # --- 3. DIET MENUS ---
 diet_menus = {
@@ -163,7 +174,7 @@ def get_meal_phase():
 
 meal_title, meal_msg = get_meal_phase()
 routine_name, exercise_list = workouts[day_idx]
-warmup_title, warmup_list = specific_warmups[day_idx]
+warmup_title, warmup_list = warmups[day_idx]
 
 # --- DASHBOARD UI ---
 
@@ -191,31 +202,33 @@ with c3:
 col_main, col_side = st.columns([2, 1])
 
 with col_main:
-    # A. WARMUP (Video Enabled)
+    # A. WARMUP (Specifics)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader(f"🔥 Step 1: {warmup_title}")
+    st.write("Perform all movements for 5-7 minutes.")
     
-    tab_u, tab_s = st.tabs(["1. Universal Starter", "2. Specific Warmup"])
-    
-    with tab_u:
-        for move in universal_warmup:
-            with st.expander(move['name']):
-                st.video(f"https://www.youtube.com/watch?v={move['url']}")
-                st.checkbox(f"Done: {move['name']}", key=move['name'])
-    
-    with tab_s:
-        for move in warmup_list:
-            with st.expander(move['name']):
-                st.video(f"https://www.youtube.com/watch?v={move['url']}")
-                st.checkbox(f"Done: {move['name']}", key=move['name'])
-    
-    st.info("⚠️ Warmup Rule: Do 1 set @ 50% weight before your first heavy set.")
+    for move in warmup_list:
+        with st.expander(move['name']):
+            st.video(f"https://www.youtube.com/watch?v={move['url']}")
+            # Fallback Link
+            alt_url = f"https://www.youtube.com/results?search_query={move['name'].replace(' ', '+')}"
+            st.markdown(f"[🎥 Video Unavailable? Search Here]({alt_url})")
+            st.checkbox(f"Done: {move['name']}", key=move['name'])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # B. WORKOUT
+    # B. WORKOUT (Program Guidelines)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader(f"⚔️ Step 2: {routine_name}")
-    st.write("Perform 'A' and 'B' as a Superset (30s rest).")
+    
+    # Guidelines Box
+    st.markdown("""
+        <div class="guide-box">
+            <b>📜 PROGRAM GUIDELINES:</b><br>
+            • <b>Rest:</b> 45 Seconds between sets (Fast for Fat Burn)<br>
+            • <b>Tempo:</b> 2s Up (Explode) — 1s Squeeze — 3s Down (Control)<br>
+            • <b>Setup:</b> Tight spin-locks. Barbell for compounds, DBs for isolation.
+        </div>
+    """, unsafe_allow_html=True)
     
     if exercise_list:
         for ex in exercise_list:
@@ -224,9 +237,18 @@ with col_main:
                 st.video(f"https://www.youtube.com/watch?v={ex['url']}")
                 alt_url = f"https://www.youtube.com/results?search_query={ex['ex'].replace(' ', '+')}+form"
                 st.markdown(f"[🎥 Video Issue? Search Here]({alt_url})")
-                st.text_input(f"Notes ({ex['ex']})", key=f"n_{ex['ex']}")
+                st.text_input(f"Notes ({ex['ex']})", key=f"n_{ex['ex']}", placeholder="Log weights used...")
+        
+        st.divider()
+        st.subheader("🏁 Fat Loss Finisher (Cardio Replacement)")
+        st.write("Do this immediately after weights:")
+        f1, f2, f3 = st.columns(3)
+        f1.checkbox("Jumping Jacks (3x1 min)")
+        f2.checkbox("Mtn Climbers (3x30 sec)")
+        f3.checkbox("Shadow Box (3x2 min)")
+        
     else:
-        st.info("Sunday Recovery Day.")
+        st.info("🧘 Day 7: Active Recovery. Go for a 30-minute Brisk Walk.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_side:
@@ -257,7 +279,7 @@ with col_side:
         
         if st.button("Run Full Analysis"):
             if f_pic and b_pic:
-                st.success("Analysis Complete: Lat width increasing (Back View). Lower abs sharpening (Front View).")
+                st.success("Analysis: Lat width increasing (Back View). Lower abs sharpening (Front View).")
             else:
                 st.error("Please upload both photos.")
     else:
