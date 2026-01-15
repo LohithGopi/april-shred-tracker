@@ -67,7 +67,7 @@ st.markdown("""
 
 # --- DYNAMIC SIDEBAR ---
 with st.sidebar:
-    st.title("⚡ VEXORA HOME")
+    st.title("⚡ 90 Days Hard Challenge")
     st.caption("South Indian Cut Protocol")
     
     st.subheader("🗓️ Timeline")
