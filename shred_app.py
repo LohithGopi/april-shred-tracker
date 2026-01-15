@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 # --- CONFIG ---
-st.set_page_config(page_title="CUT THE FAT ", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="90 Days", page_icon="⚡", layout="wide")
 
 # --- VEXORA CSS ---
 st.markdown("""
@@ -86,9 +86,10 @@ with st.sidebar:
 # --- CORE LOGIC ---
 day_idx = view_date.weekday()
 days_into_program = (view_date - start_date).days + 1
-days_left = (date(2026, 4, 1) - view_date).days
+# UPDATED DEADLINE: May 1st, 2026
+days_left = (date(2026, 5, 1) - view_date).days
 
-# --- 1. NEW WORKOUT DATABASE (Program Guidelines) ---
+# --- 1. WORKOUT DATABASE (Program Guidelines) ---
 workouts = {
     0: ("Chest & Back (Width/Thickness)", [
         {"ex": "BB Floor Press", "sets": "4 sets x 12-15", "url": "uUGDRwge4F8"},
@@ -119,7 +120,7 @@ workouts = {
 for i in range(3, 6): workouts[i] = workouts[i-3]
 workouts[6] = ("Rest & Active Recovery", [])
 
-# --- 2. NEW WARMUP DATABASE (Specifics) ---
+# --- 2. WARMUP DATABASE (Specifics) ---
 warmups = {
     0: ("Chest Warmup", [
         {"name": "Arm Circles (Big & Small)", "url": "1P-y6bPg1q4"},
@@ -184,7 +185,7 @@ st.markdown(f"""
         <h1 style="margin-bottom: 5px;">Day {days_into_program}: {routine_name}</h1>
         <p style="font-size: 1.1rem; opacity: 0.9;">
             <b>Date:</b> {view_date.strftime('%A, %d %B %Y')} • 
-            <b>Countdown:</b> {days_left} Days to April 1st
+            <b>Countdown:</b> {days_left} Days to May 1st
         </p>
     </div>
 """, unsafe_allow_html=True)
