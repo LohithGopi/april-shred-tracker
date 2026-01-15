@@ -1,93 +1,112 @@
 import streamlit as st
 from datetime import datetime
 
-# --- DEADLINE CONFIG ---
-deadline = datetime(2026, 4, 1)
-today_dt = datetime.now()
-days_left = (deadline - today_dt).days
+# --- CONFIG & THEME ---
+st.set_page_config(page_title="Shred Dashboard", page_icon="💪", layout="wide")
 
-# --- APP CONFIG ---
-st.set_page_config(page_title="April Shred Tracker", page_icon="🔥", layout="centered")
-
-# --- CUSTOM THEME ---
+# Custom CSS for the "Crunch Fitness" Dashboard Look
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: white; }
-    .stCheckbox { font-size: 18px; background: #1e2130; border-radius: 8px; padding: 10px; margin-bottom: 5px; }
-    div.stButton > button:first-child { background-color: #ff4b4b; color: white; border-radius: 10px; font-weight: bold; height: 3em; }
+    .stApp { background-color: #f4f4f4; color: #333; }
+    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e0e0e0; }
+    
+    /* Card Styling */
+    .metric-card {
+        background-color: white; padding: 20px; border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px;
+    }
+    .header-card {
+        background: linear-gradient(90deg, #FF4B2B 0%, #FF8008 100%);
+        color: white; padding: 30px; border-radius: 20px; margin-bottom: 30px;
+    }
+    h1, h2, h3 { font-family: 'Inter', sans-serif; font-weight: 700; }
+    .stCheckbox { background: white; padding: 10px; border-radius: 10px; border: 1px solid #eee; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- HEADER & COUNTDOWN ---
-st.title("🏃‍♂️ Arnold Split: April Shred")
-st.subheader(f"⏳ {max(0, days_left)} Days Until April 1st!")
-progress = max(0, min(100, (60 - days_left) / 60)) 
-st.progress(progress)
-
-# --- WORKOUT DATA (FIXED VIDEOS) ---
-workouts = {
-    0: {"name": "Chest & Back", "exercises": [
-        {"ex": "Dumbbell/Barbell Floor Press", "url": "https://www.youtube.com/watch?v=uUGDRwge4F8"},
-        {"ex": "Barbell Bent-Over Row", "url": "https://www.youtube.com/watch?v=VKFeB7kx8fs"},
-        {"ex": "Dumbbell Floor Flyes", "url": "https://www.youtube.com/watch?v=eGjt4lk6g34"}
-    ], "jog": "15 mins steady pace"},
-    1: {"name": "Shoulders & Arms", "exercises": [
-        {"ex": "Overhead Press", "url": "https://www.youtube.com/watch?v=2yjwxtZ_Vsc"},
-        {"ex": "Lateral Raises", "url": "https://www.youtube.com/watch?v=3VcKaXpzqRo"},
-        {"ex": "Bicep Curls", "url": "https://www.youtube.com/watch?v=ykJmrZ5v0Oo"},
-        {"ex": "Tricep Overhead Extension", "url": "https://www.youtube.com/watch?v=6SS6K3lAwWI"}
-    ], "jog": "Rest Day for Legs"},
-    2: {"name": "Legs & Abs", "exercises": [
-        {"ex": "Barbell Back Squats", "url": "https://www.youtube.com/watch?v=R2dMsVhZTVM"},
-        {"ex": "Dumbbell Goblet Squats", "url": "https://www.youtube.com/watch?v=MVMnk0HiTMc"},
-        {"ex": "Plank (Focus on core)", "url": "https://www.youtube.com/watch?v=ASdvN_XEl_c"}
-    ], "jog": "25 mins high intensity"},
+# --- CALCULATIONS ---
+deadline = datetime(2026, 4, 1)
+days_left = (deadline - datetime.now()).days
+workout_data = {
+    0: ("Chest & Back", ["Floor Press", "Barbell Row", "Flyes"]),
+    1: ("Shoulders & Arms", ["Overhead Press", "Lateral Raise", "Curls"]),
+    2: ("Legs & Abs", ["Back Squats", "Goblet Squats", "Plank"]),
 }
+for i in range(3, 6): workout_data[i] = workout_data[i-3]
+workout_data[6] = ("Rest & Recovery", [])
 
-# Mapping Thu/Fri/Sat to the same split
-for i in range(3, 6): workouts[i] = workouts[i-3]
-workouts[6] = {"name": "Rest & Recovery", "exercises": [], "jog": "20 min light walk"}
+day_name, exercises = workout_data[datetime.now().weekday()]
 
-# --- TODAY'S WORKOUT SECTION ---
-day_idx = today_dt.weekday()
-current_workout = workouts[day_idx]
+# --- SIDEBAR (Gym Listing Style) ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/69/69840.png", width=50)
+    st.title("Gym Listing")
+    st.text_input("🔍 Search Workouts")
+    st.markdown("### My Plan\n**365 Executive Plan**")
+    st.divider()
+    st.markdown("### Quick Stats")
+    st.metric("Daily Water", "3.5L", "0.5L")
+    st.metric("Consistency", "92%", "4%")
 
-st.header(f"📅 Today's Split: {current_workout['name']}")
+# --- MAIN CONTENT ---
+# Header Card
+st.markdown(f"""
+    <div class="header-card">
+        <h1 style='margin:0;'>April Shred Dashboard</h1>
+        <p style='font-size: 1.2rem; opacity: 0.9;'>Mysuru, KA • ⏳ {days_left} Days to Deadline</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-if current_workout['exercises']:
-    for item in current_workout['exercises']:
-        with st.expander(f"💪 {item['ex']}"):
-            st.video(item['url'])
-            # Dynamic Fallback Search
-            search_url = f"https://www.youtube.com/results?search_query=how+to+do+{item['ex'].replace(' ', '+')}"
-            st.write(f"[Problem with video? Click here to search for {item['ex']}]({search_url})")
-    st.warning(f"🏃 Cardio Goal: {current_workout['jog']}")
-else:
-    st.success("Sunday Rest! Focus on your Weekly Progress Photos.")
+# Top Metrics (Punch in, Revenue, Expense style)
+col1, col2, col3 = st.columns(3)
 
-st.divider()
+with col1:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("Today's Split")
+    st.title(day_name)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- DIET LOG ---
-st.header("🥗 South Indian Diet Log")
-c1, c2 = st.columns(2)
-with c1:
-    st.checkbox("☕ Pre-Workout: Coffee + Banana")
-    st.checkbox("🥚 Post-Workout: 3 Egg Whites / Kadale Kalu")
-with c2:
-    st.checkbox("🍚 Rice: Quarter Plate Only")
-    st.checkbox("💧 Water: 3.5 Liters Done")
+with col2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("Current Weight")
+    st.title("78.5 kg")
+    st.markdown("📉 -1.2kg this week")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- PROGRESS ---
-st.divider()
-st.header("📸 Sunday Progress")
-w1, w2 = st.columns(2)
-with w1:
-    weight = st.number_input("Weight (kg)", format="%.2f")
-with w2:
-    waist = st.number_input("Waist (cm)", format="%.1f")
+with col3:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("Diet Adherence")
+    st.title("85%")
+    st.progress(0.85)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-st.file_uploader("Upload Sunday Photo", type=['jpg', 'png'])
+# Workout & Diet Section
+c_left, c_right = st.columns([2, 1])
 
-if st.button("SAVE LOG"):
-    st.balloons()
-    st.success("Progress Saved! See you tomorrow.")
+with c_left:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("📋 Training Plan")
+    if exercises:
+        for ex in exercises:
+            with st.expander(f"💪 {ex}"):
+                st.write("Video instruction placeholder...")
+                st.info("Form Tip: 3-second lowering phase.")
+    else:
+        st.write("Enjoy your active recovery! Go for a 20-min light walk.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with c_right:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("🥗 Diet Log")
+    st.checkbox("Pre-Workout Meal")
+    st.checkbox("Post-Workout Protein")
+    st.checkbox("Quarter Plate Rice")
+    st.checkbox("3.5L Water")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Progress Section
+st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+st.subheader("📈 Body Progression")
+st.file_uploader("Upload Sunday Photo", label_visibility="collapsed")
+st.button("Save Daily Log")
+st.markdown("</div>", unsafe_allow_html=True)
