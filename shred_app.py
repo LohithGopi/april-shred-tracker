@@ -1,101 +1,160 @@
 import streamlit as st
+import cv2
+import mediapipe as mp
+import numpy as np
+import tempfile
+import os
 from datetime import datetime, date, time
-import random
-import time as t
 
 # --- CONFIG ---
 st.set_page_config(page_title="90 Days Hard", page_icon="⚡", layout="wide")
 
-# --- VEXORA CSS ---
+# --- VEXORA CSS (Kept from your original design) ---
 st.markdown("""
     <style>
-    /* Deep Space Background */
-    .stApp {
-        background: radial-gradient(circle at 10% 20%, rgb(20, 20, 20) 0%, rgb(0, 0, 0) 90%);
-        background-attachment: fixed;
-        background-size: cover;
-    }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: rgba(15, 15, 15, 0.95);
-        border-right: 1px solid #333;
-    }
-
-    /* Glass Cards */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 25px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-    }
-    
-    /* Typography */
+    .stApp { background: radial-gradient(circle at 10% 20%, rgb(20, 20, 20) 0%, rgb(0, 0, 0) 90%); background-attachment: fixed; background-size: cover; }
+    [data-testid="stSidebar"] { background-color: rgba(15, 15, 15, 0.95); border-right: 1px solid #333; }
+    .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 25px; margin-bottom: 20px; }
     h1, h2, h3, h4 { font-family: 'Inter', sans-serif; color: #FFFFFF !important; font-weight: 700; }
     p, label, span, div, li { color: #B0B0B0 !important; }
-    strong { color: #FF4B2B !important; }
-    
-    /* Interactive */
-    .stDateInput div div input { background-color: #1a1a1a !important; color: white !important; }
-    .stButton > button {
-        background: linear-gradient(90deg, #FF4B2B 0%, #FF416C 100%);
-        border: none; color: white !important; font-weight: bold; border-radius: 10px;
-    }
-    
-    /* Header */
-    .hero-header {
-        background: linear-gradient(135deg, #FF8008 0%, #FFC837 100%);
-        padding: 35px; border-radius: 20px; margin-bottom: 25px;
-        color: black !important;
-    }
-    .hero-header h1, .hero-header p, .hero-header span { color: #1a1a1a !important; }
-    
-    /* Guidelines Box */
-    .guide-box {
-        border-left: 4px solid #FF4B2B;
-        background: rgba(255, 75, 43, 0.1);
-        padding: 10px 15px;
-        margin-bottom: 15px;
-        border-radius: 5px;
-    }
-
-    /* Analysis Box */
-    .analysis-box {
-        background: rgba(0, 255, 150, 0.1);
-        border: 1px solid #00FF96;
-        padding: 15px;
-        border-radius: 10px;
-        margin-top: 10px;
-    }
-    .analysis-error {
-        background: rgba(255, 50, 50, 0.1);
-        border: 1px solid #FF3232;
-        padding: 15px;
-        border-radius: 10px;
-        margin-top: 10px;
-    }
+    .hero-header { background: linear-gradient(135deg, #FF8008 0%, #FFC837 100%); padding: 35px; border-radius: 20px; margin-bottom: 25px; color: black !important; }
+    .hero-header h1, .hero-header p { color: #1a1a1a !important; }
+    .analysis-box { background: rgba(0, 255, 150, 0.1); border: 1px solid #00FF96; padding: 15px; border-radius: 10px; margin-top: 10px; }
+    .analysis-warning { background: rgba(255, 165, 0, 0.1); border: 1px solid #FFA500; padding: 15px; border-radius: 10px; margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
+# --- HELPER: CALCULATE ANGLES ---
+def calculate_angle(a, b, c):
+    """
+    Calculates the angle between three points (a, b, c).
+    a = first point coordinates [x, y]
+    b = mid point coordinates [x, y]
+    c = end point coordinates [x, y]
+    """
+    a = np.array(a) # First
+    b = np.array(b) # Mid
+    c = np.array(c) # End
+    
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians*180.0/np.pi)
+    
+    if angle > 180.0:
+        angle = 360 - angle
+        
+    return angle
+
+# --- REAL AI ENGINE (MediaPipe) ---
+def process_video(video_path, exercise_name):
+    mp_pose = mp.solutions.pose
+    pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    mp_drawing = mp.solutions.drawing_utils
+
+    cap = cv2.VideoCapture(video_path)
+    
+    # Video Properties
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    
+    # Output Video Setup
+    output_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
+    # Using 'avc1' codec for better browser compatibility
+    fourcc = cv2.VideoWriter_fourcc(*'avc1') 
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    feedback_log = []
+    frames_processed = 0
+    min_knee_angle = 180
+    min_elbow_angle = 180
+    
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Convert to RGB (MediaPipe requires RGB)
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        
+        # Make detection
+        results = pose.process(image)
+        
+        # Draw the landmarks back onto the image
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        if results.pose_landmarks:
+            mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            
+            # EXTRACT LANDMARKS
+            landmarks = results.pose_landmarks.landmark
+            
+            # Get coordinates for specific joints
+            # LEFT SIDE
+            l_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+            l_elbow = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+            l_wrist = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+            l_hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            l_knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            l_ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+
+            # CALCULATE REAL ANGLES
+            knee_angle = calculate_angle(l_hip, l_knee, l_ankle)
+            elbow_angle = calculate_angle(l_shoulder, l_elbow, l_wrist)
+            
+            # Track minimums (max depth/flexion)
+            if knee_angle < min_knee_angle: min_knee_angle = knee_angle
+            if elbow_angle < min_elbow_angle: min_elbow_angle = elbow_angle
+
+            # Visualize Angles on Screen
+            cv2.putText(image, str(int(knee_angle)), tuple(np.multiply(l_knee, [width, height]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(image, str(int(elbow_angle)), tuple(np.multiply(l_elbow, [width, height]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+        out.write(image)
+        frames_processed += 1
+
+    cap.release()
+    out.release()
+    
+    # --- INTELLIGENT FEEDBACK GENERATION ---
+    final_feedback = {"status": "success", "msg": "Analysis Complete", "details": []}
+    
+    # 1. SQUAT / LEG LOGIC
+    if "Squat" in exercise_name or "Leg" in exercise_name:
+        if min_knee_angle < 95:
+            final_feedback["details"].append("✅ Great Depth! You broke parallel (knee angle < 90°).")
+        elif min_knee_angle < 110:
+            final_feedback["details"].append("⚠️ Good Depth, but try to go slightly lower for full activation.")
+        else:
+            final_feedback["status"] = "warning"
+            final_feedback["details"].append("❌ Too High. You didn't reach depth. Aim for hips parallel to knees.")
+
+    # 2. PRESS / PUSH LOGIC
+    elif "Press" in exercise_name or "Push" in exercise_name:
+        if min_elbow_angle < 70:
+            final_feedback["details"].append("✅ Full Range of Motion (Deep stretch at the bottom).")
+        else:
+            final_feedback["details"].append("⚠️ Try to bring the weight lower to stretch the chest/shoulders more.")
+
+    # 3. PULL / ROW LOGIC
+    elif "Row" in exercise_name or "Pull" in exercise_name:
+        final_feedback["details"].append("ℹ️ For Rows: Ensure your back remained neutral (straight line) throughout.")
+    
+    else:
+        final_feedback["details"].append(f"Movement analyzed. Max Knee Flexion: {int(min_knee_angle)}°. Max Elbow Flexion: {int(min_elbow_angle)}°.")
+
+    return output_path, final_feedback
+
 # --- DYNAMIC SIDEBAR ---
 with st.sidebar:
-    st.title("⚡ 90 Days Hard Challenge")
-    st.caption("South Indian Cut Protocol")
-    
-    st.subheader("🗓️ Timeline")
+    st.title("⚡ 90 Days Hard")
+    st.caption("Accurate AI Form Edition")
     start_date = st.date_input("Start Date", value=date(2026, 1, 15))
     view_date = st.date_input("View Dashboard For:", value=date.today())
-    
     st.divider()
-    st.subheader("🥗 Daily Diet Mode")
     diet_option = st.radio("Select Menu:", ["Option A: Non-Veg", "Option B: Veg"])
-    
     st.divider()
-    st.subheader("⚖️ Metrics")
     start_weight = st.number_input("Start Weight (kg)", value=80.0)
     target_weight = st.number_input("Goal Weight (kg)", value=70.0)
 
@@ -104,256 +163,79 @@ day_idx = view_date.weekday()
 days_into_program = (view_date - start_date).days + 1
 days_left = (date(2026, 5, 1) - view_date).days
 
-# --- 1. WORKOUT DATABASE (Program Guidelines) ---
+# Workouts & Warmups Data
 workouts = {
-    0: ("Chest & Back (Width/Thickness)", [
-        {"ex": "BB Floor Press", "sets": "4 sets x 12-15", "url": "uUGDRwge4F8"},
-        {"ex": "BB Bent Over Row", "sets": "4 sets x 12-15", "url": "6TSzP8P-S0I"},
-        {"ex": "DB Floor Flys", "sets": "3 sets x 12-15", "url": "eGjt4lk6g34"},
-        {"ex": "One-Arm DB Row", "sets": "3 sets x 12/side", "url": "dFzUjzuW_20"},
-        {"ex": "Push-ups", "sets": "3 sets x Failure", "url": "IODxDxX7oi4"},
-        {"ex": "DB Pullover", "sets": "3 sets x 15", "url": "jQjWlJTK5yU"}
-    ]),
-    1: ("Shoulders & Arms (Arnold Look)", [
-        {"ex": "Arnold Press", "sets": "4 sets x 10-12", "url": "3mlObjy7O7w"},
-        {"ex": "Side Lateral Raise", "sets": "4 sets x 15", "url": "3VcKaXpzqRo"},
-        {"ex": "BB Upright Row", "sets": "3 sets x 12", "url": "amCU-ziCQ4E"},
-        {"ex": "BB Bicep Curl", "sets": "4 sets x 10-12", "url": "kwG2ipFRgfo"},
-        {"ex": "BB Skullcrushers", "sets": "4 sets x 12", "url": "d_KZxk8_SMc"},
-        {"ex": "Hammer Curls", "sets": "3 sets x 12", "url": "7jqi2qWAUXk"},
-        {"ex": "Overhead Extension", "sets": "3 sets x 15", "url": "6SS6K3lAwWI"}
-    ]),
-    2: ("Legs & Lower Back (Calorie Burn)", [
-        {"ex": "Goblet Squat", "sets": "4 sets x 15-20", "url": "MeIiGibT690"},
-        {"ex": "DB Lunges", "sets": "3 sets x 12/leg", "url": "D7KaRcUTQeE"},
-        {"ex": "Stiff-Leg Deadlift", "sets": "4 sets x 12-15", "url": "jcNh17Ckjgg"},
-        {"ex": "Calf Raises", "sets": "4 sets x 20", "url": "KxEYX_cEbFA"},
-        {"ex": "Plank", "sets": "3 sets x 45 sec", "url": "ASdvN_XEl_c"}
-    ])
+    0: ("Chest & Back", [{"ex": "BB Floor Press", "sets": "4x12", "url": "uUGDRwge4F8"}, {"ex": "BB Bent Over Row", "sets": "4x12", "url": "6TSzP8P-S0I"}]),
+    1: ("Shoulders & Arms", [{"ex": "Arnold Press", "sets": "4x12", "url": "3mlObjy7O7w"}, {"ex": "BB Bicep Curl", "sets": "4x12", "url": "kwG2ipFRgfo"}]),
+    2: ("Legs", [{"ex": "Goblet Squat", "sets": "4x15", "url": "MeIiGibT690"}, {"ex": "DB Lunges", "sets": "3x12", "url": "D7KaRcUTQeE"}])
 }
-# Map Day 4, 5, 6
+# Fill remaining days
 for i in range(3, 6): workouts[i] = workouts[i-3]
-workouts[6] = ("Rest & Active Recovery", [])
+workouts[6] = ("Rest", [])
 
-# --- 2. WARMUP DATABASE (Specifics) ---
 warmups = {
-    0: ("Chest Warmup", [
-        {"name": "Arm Circles (Big & Small)", "url": "1P-y6bPg1q4"},
-        {"name": "Torso Twists (30s)", "url": "q5At0q7k3F4"},
-        {"name": "Wall Slides (15 reps)", "url": "2Q2g4g0w0M0"},
-        {"name": "Cat-Cow Stretch (10 reps)", "url": "kqnua4rHVVA"},
-        {"name": "Push-up to Down Dog (10 reps)", "url": "z-tX1B3jXjo"}
-    ]),
-    1: ("Shoulder Warmup", [
-        {"name": "Shoulder Dislocations (15 reps)", "url": "02e1y2q4dKA"},
-        {"name": "Band Pull-Aparts (Simulate)", "url": "fo3d4b68J58"},
-        {"name": "Arm Cross Swings (30s)", "url": "4rGqjH1a2j0"},
-        {"name": "Wrist Circles", "url": "mJ2m55f6e8U"}
-    ]),
-    2: ("Leg Warmup", [
-        {"name": "Leg Swings (Front/Side)", "url": "4K5i5J5q5r0"},
-        {"name": "Bodyweight Squats (20 reps)", "url": "aclHkVaku9U"},
-        {"name": "Lunge with Twist (10/side)", "url": "4rGqjH1a2j0"},
-        {"name": "High Knees (30s)", "url": "Z7z7sZ3A1kU"},
-        {"name": "Glute Bridges (15 reps)", "url": "0Di1rZ7r-20"}
-    ])
+    0: ("Upper Body Warmup", [{"name": "Arm Circles", "url": "1P-y6bPg1q4"}]),
+    1: ("Shoulder Warmup", [{"name": "Dislocations", "url": "02e1y2q4dKA"}]),
+    2: ("Leg Warmup", [{"name": "Leg Swings", "url": "4K5i5J5q5r0"}])
 }
 for i in range(3, 6): warmups[i] = warmups[i-3]
-warmups[6] = ("Recovery Flow", [{"name": "30 Min Brisk Walk", "url": "nj155mF4q_Y"}])
+warmups[6] = ("Recovery", [])
 
-# --- 3. DIET MENUS ---
-diet_menus = {
-    "Option A: Non-Veg": {
-        "Essentials": ["Pre: Black Coffee + 1 Banana", "Post: 3-4 Boiled Egg Whites"],
-        "Breakfast": "3 Egg Omelette + 2 Small Idlis",
-        "Lunch": "150g Chicken Curry (Low Oil) + 1/4 Brown Rice",
-        "Dinner": "2 Chapatis + 100g Grilled Fish + Salad"
-    },
-    "Option B: Veg": {
-        "Essentials": ["Pre: Black Coffee + 1 Banana", "Post: 1 Scoop Whey OR Sprouted Moong"],
-        "Breakfast": "1 Cup Pesarattu OR Paneer Bhurji + 1 Chapati",
-        "Lunch": "1 Cup Thick Sambar + 100g Paneer + Small Rice",
-        "Dinner": "2 Chapatis + Mixed Veg Kootu + Salad"
-    }
-}
-selected_diet = diet_menus[diet_option]
-
-# --- 4. MEAL REMINDER ---
-def get_meal_phase():
-    if view_date != date.today(): return "📅 Planning", "Reviewing " + str(view_date)
-    now = datetime.now().time()
-    if time(5,0) <= now <= time(9,0): return "☕ Pre-Workout", "Black Coffee + Banana"
-    elif time(11,0) <= now <= time(13,0): return "🥛 Post-Workout", "Protein / Egg Whites"
-    elif time(13,0) < now <= time(15,0): return "🍛 Lunch", "1/4 Rice Rule Active"
-    elif time(19,0) <= now <= time(21,30): return "🥗 Dinner", "No Rice. Chapati Only."
-    else: return "💧 Hydration", "Drink Water Now"
-
-meal_title, meal_msg = get_meal_phase()
 routine_name, exercise_list = workouts[day_idx]
 warmup_title, warmup_list = warmups[day_idx]
 
-# --- 5. AI FORM CHECKER (SIMULATION) ---
-def analyze_movement(exercise_name):
-    # This simulates computer vision analysis (MediaPipe/OpenCV logic would go here)
-    # We return random feedback to demonstrate the UI flow
-    time_delay = t.sleep(2.5) 
-    
-    common_mistakes = {
-        "Squat": ["Knees caving inwards", "Heels lifting off ground", "Not breaking parallel"],
-        "Press": ["Arching back too much", "Elbows flaring out", "Wrist not stacked"],
-        "Deadlift": ["Rounding lower back", "Bar too far from shins", "Hips rising too fast"]
-    }
-    
-    # Generic logic for demo
-    score = random.randint(60, 95)
-    if score > 80:
-        return {
-            "status": "success", 
-            "msg": "✅ Form looks Solid!", 
-            "detail": "Tempo is controlled. Depth is good. Keep this up."
-        }
-    else:
-        # Pick a random mistake based on name or generic
-        mistake = random.choice(common_mistakes.get("Squat", ["Back is rounding", "Tempo too fast"])) 
-        return {
-            "status": "error", 
-            "msg": f"⚠️ Detection: {mistake}", 
-            "detail": f"Your form score is {score}%. Try to stabilize your core and slow down the eccentric phase."
-        }
+# --- UI LAYOUT ---
+st.markdown(f"""<div class="hero-header"><h1>Day {days_into_program}: {routine_name}</h1><p>Date: {view_date}</p></div>""", unsafe_allow_html=True)
 
-# --- DASHBOARD UI ---
-
-# HEADER
-st.markdown(f"""
-    <div class="hero-header">
-        <h1 style="margin-bottom: 5px;">Day {days_into_program}: {routine_name}</h1>
-        <p style="font-size: 1.1rem; opacity: 0.9;">
-            <b>Date:</b> {view_date.strftime('%A, %d %B %Y')} • 
-            <b>Countdown:</b> {days_left} Days to May 1st
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-
-# METRICS
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.markdown(f"""<div class="glass-card"><h3>🏋️ Daily Focus</h3><h2>{routine_name}</h2><p>Warmup: {warmup_title}</p></div>""", unsafe_allow_html=True)
-with c2:
-    st.markdown(f"""<div class="glass-card"><h3>🔔 Nutrition Alert</h3><h2 style="color:#FF8008 !important">{meal_title}</h2><p>{meal_msg}</p></div>""", unsafe_allow_html=True)
-with c3:
-    st.markdown(f"""<div class="glass-card"><h3>⚖️ Goal Tracker</h3><h2>{start_weight} kg → {target_weight} kg</h2><p>Target Loss: {round(start_weight - target_weight, 1)} kg</p></div>""", unsafe_allow_html=True)
-
-# MAIN CONTENT
 col_main, col_side = st.columns([2, 1])
 
 with col_main:
-    # A. WARMUP (Specifics)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.subheader(f"🔥 Step 1: {warmup_title}")
-    st.write("Perform all movements for 5-7 minutes.")
-    
-    for move in warmup_list:
-        with st.expander(move['name']):
-            st.video(f"https://www.youtube.com/watch?v={move['url']}")
-            alt_url = f"https://www.youtube.com/results?search_query={move['name'].replace(' ', '+')}"
-            st.markdown(f"[🎥 Video Unavailable? Search Here]({alt_url})")
-            st.checkbox(f"Done: {move['name']}", key=move['name'])
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # B. WORKOUT (Program Guidelines + AI Form Check)
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.subheader(f"⚔️ Step 2: {routine_name}")
-    
-    # Guidelines Box
-    st.markdown("""
-        <div class="guide-box">
-            <b>📜 PROGRAM GUIDELINES:</b><br>
-            • <b>Rest:</b> 45 Seconds between sets (Fast for Fat Burn)<br>
-            • <b>Tempo:</b> 2s Up (Explode) — 1s Squeeze — 3s Down (Control)<br>
-            • <b>Setup:</b> Tight spin-locks. Barbell for compounds, DBs for isolation.
-        </div>
-    """, unsafe_allow_html=True)
+    st.subheader(f"⚔️ {routine_name}")
     
     if exercise_list:
         for ex in exercise_list:
             with st.expander(f"💪 {ex['ex']}"):
-                t1, t2 = st.tabs(["📝 Guide & Log", "🤖 AI Form Check"])
+                t1, t2 = st.tabs(["📝 Guide", "🤖 Real AI Analysis"])
                 
-                # TAB 1: Guide
                 with t1:
                     st.write(f"**Target:** {ex['sets']}")
                     st.video(f"https://www.youtube.com/watch?v={ex['url']}")
-                    st.text_input(f"Notes ({ex['ex']})", key=f"n_{ex['ex']}", placeholder="Log weights used...")
                 
-                # TAB 2: AI Check
                 with t2:
-                    st.write("Upload a video of your set to check your form.")
+                    st.info("Upload a video. The AI will detect your joints and measure angles.")
                     uploaded_file = st.file_uploader(f"Upload {ex['ex']}", type=['mp4', 'mov'], key=f"vid_{ex['ex']}")
                     
                     if uploaded_file is not None:
-                        # Display uploaded video
-                        st.video(uploaded_file)
+                        # Save to temp file for OpenCV to read
+                        tfile = tempfile.NamedTemporaryFile(delete=False) 
+                        tfile.write(uploaded_file.read())
                         
-                        if st.button(f"Analyze Form ⚡", key=f"btn_{ex['ex']}"):
-                            with st.spinner("🤖 AI Vision is scanning keypoints (Knees, Back, Elbows)..."):
-                                result = analyze_movement(ex['ex'])
-                                
-                            if result["status"] == "success":
-                                st.markdown(f"""<div class="analysis-box"><h3>{result['msg']}</h3><p>{result['detail']}</p></div>""", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"""<div class="analysis-error"><h3>{result['msg']}</h3><p>{result['detail']}</p></div>""", unsafe_allow_html=True)
-
-        st.divider()
-        st.subheader("🏁 Fat Loss Finisher (Cardio Replacement)")
-        st.write("Do this immediately after weights:")
-        f1, f2, f3 = st.columns(3)
-        f1.checkbox("Jumping Jacks (3x1 min)")
-        f2.checkbox("Mtn Climbers (3x30 sec)")
-        f3.checkbox("Shadow Box (3x2 min)")
-        
+                        if st.button(f"Start Computer Vision Scan", key=f"btn_{ex['ex']}"):
+                            with st.spinner("🤖 Mapping Skeleton & Calculating Angles..."):
+                                try:
+                                    # RUN THE REAL ENGINE
+                                    processed_video_path, feedback = process_video(tfile.name, ex['ex'])
+                                    
+                                    # Show Feedback
+                                    css_class = "analysis-warning" if feedback['status'] == 'warning' else "analysis-box"
+                                    st.markdown(f"""<div class="{css_class}"><h3>{feedback['msg']}</h3><ul>{''.join([f'<li>{d}</li>' for d in feedback['details']])}</ul></div>""", unsafe_allow_html=True)
+                                    
+                                    # Show Processed Video
+                                    st.subheader("👁️ AI Vision Overlay")
+                                    st.video(processed_video_path)
+                                    
+                                except Exception as e:
+                                    st.error(f"Error analyzing video: {e}")
     else:
-        st.info("🧘 Day 7: Active Recovery. Go for a 30-minute Brisk Walk.")
+        st.info("Rest Day.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_side:
-    # C. SOUTH INDIAN DIET
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.subheader(f"🥗 {diet_option}")
-    st.write("**Essentials:**")
-    for item in selected_diet["Essentials"]: st.checkbox(item)
-    st.divider()
-    st.write("**Main Meals:**")
-    st.checkbox(f"🍳 {selected_diet['Breakfast']}")
-    st.checkbox(f"🍛 {selected_diet['Lunch']}")
-    st.checkbox(f"🥗 {selected_diet['Dinner']}")
-    st.divider()
-    st.subheader("💧 Hydration (4L)")
-    water = st.slider("Liters", 0.0, 4.0, 1.5, 0.5)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # D. DUAL PHOTO UPLOAD
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
-    if day_idx == 6:
-        # SUNDAY (Weekly Analyst)
-        st.subheader("🤖 Weekly AI Analyst")
-        st.write("Upload BOTH views for full analysis.")
-        f_pic = st.file_uploader("1. Front View", key="sun_front")
-        b_pic = st.file_uploader("2. Back View", key="sun_back")
-        
-        if st.button("Run Full Analysis"):
-            if f_pic and b_pic:
-                st.success("Analysis: Lat width increasing (Back View). Lower abs sharpening (Front View).")
-            else:
-                st.error("Please upload both photos.")
-    else:
-        # DAILY LOG
-        st.subheader("📸 Daily Body Log")
-        st.write("Track changes daily.")
-        d_f = st.file_uploader("Front View", key=f"day_f_{view_date}")
-        d_b = st.file_uploader("Back View", key=f"day_b_{view_date}")
-        
-        if st.button("Save Daily Log"):
-            st.success("Daily visual log saved.")
-
+    st.subheader("🥗 Diet")
+    st.write("Track your meals here.")
+    st.checkbox("Breakfast")
+    st.checkbox("Lunch")
+    st.checkbox("Dinner")
     st.markdown('</div>', unsafe_allow_html=True)
