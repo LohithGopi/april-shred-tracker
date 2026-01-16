@@ -1,6 +1,5 @@
 streamlit
-mediapipe 
-opencv
-python-headless 
-numpy 
 pandas
+numpy
+mediapipe
+opencv-python-headless
