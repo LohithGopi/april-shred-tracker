@@ -1,10 +1,10 @@
 import streamlit as st
 from datetime import datetime, date, time
-import pandas as pd
-import numpy as np
+import random
+import time as t
 
 # --- CONFIG ---
-st.set_page_config(page_title="90 Days", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="90 Days Hard", page_icon="⚡", layout="wide")
 
 # --- VEXORA CSS ---
 st.markdown("""
@@ -62,6 +62,22 @@ st.markdown("""
         margin-bottom: 15px;
         border-radius: 5px;
     }
+
+    /* Analysis Box */
+    .analysis-box {
+        background: rgba(0, 255, 150, 0.1);
+        border: 1px solid #00FF96;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 10px;
+    }
+    .analysis-error {
+        background: rgba(255, 50, 50, 0.1);
+        border: 1px solid #FF3232;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -86,7 +102,6 @@ with st.sidebar:
 # --- CORE LOGIC ---
 day_idx = view_date.weekday()
 days_into_program = (view_date - start_date).days + 1
-# UPDATED DEADLINE: May 1st, 2026
 days_left = (date(2026, 5, 1) - view_date).days
 
 # --- 1. WORKOUT DATABASE (Program Guidelines) ---
@@ -177,6 +192,35 @@ meal_title, meal_msg = get_meal_phase()
 routine_name, exercise_list = workouts[day_idx]
 warmup_title, warmup_list = warmups[day_idx]
 
+# --- 5. AI FORM CHECKER (SIMULATION) ---
+def analyze_movement(exercise_name):
+    # This simulates computer vision analysis (MediaPipe/OpenCV logic would go here)
+    # We return random feedback to demonstrate the UI flow
+    time_delay = t.sleep(2.5) 
+    
+    common_mistakes = {
+        "Squat": ["Knees caving inwards", "Heels lifting off ground", "Not breaking parallel"],
+        "Press": ["Arching back too much", "Elbows flaring out", "Wrist not stacked"],
+        "Deadlift": ["Rounding lower back", "Bar too far from shins", "Hips rising too fast"]
+    }
+    
+    # Generic logic for demo
+    score = random.randint(60, 95)
+    if score > 80:
+        return {
+            "status": "success", 
+            "msg": "✅ Form looks Solid!", 
+            "detail": "Tempo is controlled. Depth is good. Keep this up."
+        }
+    else:
+        # Pick a random mistake based on name or generic
+        mistake = random.choice(common_mistakes.get("Squat", ["Back is rounding", "Tempo too fast"])) 
+        return {
+            "status": "error", 
+            "msg": f"⚠️ Detection: {mistake}", 
+            "detail": f"Your form score is {score}%. Try to stabilize your core and slow down the eccentric phase."
+        }
+
 # --- DASHBOARD UI ---
 
 # HEADER
@@ -211,13 +255,12 @@ with col_main:
     for move in warmup_list:
         with st.expander(move['name']):
             st.video(f"https://www.youtube.com/watch?v={move['url']}")
-            # Fallback Link
             alt_url = f"https://www.youtube.com/results?search_query={move['name'].replace(' ', '+')}"
             st.markdown(f"[🎥 Video Unavailable? Search Here]({alt_url})")
             st.checkbox(f"Done: {move['name']}", key=move['name'])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # B. WORKOUT (Program Guidelines)
+    # B. WORKOUT (Program Guidelines + AI Form Check)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader(f"⚔️ Step 2: {routine_name}")
     
@@ -234,12 +277,32 @@ with col_main:
     if exercise_list:
         for ex in exercise_list:
             with st.expander(f"💪 {ex['ex']}"):
-                st.write(f"**Target:** {ex['sets']}")
-                st.video(f"https://www.youtube.com/watch?v={ex['url']}")
-                alt_url = f"https://www.youtube.com/results?search_query={ex['ex'].replace(' ', '+')}+form"
-                st.markdown(f"[🎥 Video Issue? Search Here]({alt_url})")
-                st.text_input(f"Notes ({ex['ex']})", key=f"n_{ex['ex']}", placeholder="Log weights used...")
-        
+                t1, t2 = st.tabs(["📝 Guide & Log", "🤖 AI Form Check"])
+                
+                # TAB 1: Guide
+                with t1:
+                    st.write(f"**Target:** {ex['sets']}")
+                    st.video(f"https://www.youtube.com/watch?v={ex['url']}")
+                    st.text_input(f"Notes ({ex['ex']})", key=f"n_{ex['ex']}", placeholder="Log weights used...")
+                
+                # TAB 2: AI Check
+                with t2:
+                    st.write("Upload a video of your set to check your form.")
+                    uploaded_file = st.file_uploader(f"Upload {ex['ex']}", type=['mp4', 'mov'], key=f"vid_{ex['ex']}")
+                    
+                    if uploaded_file is not None:
+                        # Display uploaded video
+                        st.video(uploaded_file)
+                        
+                        if st.button(f"Analyze Form ⚡", key=f"btn_{ex['ex']}"):
+                            with st.spinner("🤖 AI Vision is scanning keypoints (Knees, Back, Elbows)..."):
+                                result = analyze_movement(ex['ex'])
+                                
+                            if result["status"] == "success":
+                                st.markdown(f"""<div class="analysis-box"><h3>{result['msg']}</h3><p>{result['detail']}</p></div>""", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"""<div class="analysis-error"><h3>{result['msg']}</h3><p>{result['detail']}</p></div>""", unsafe_allow_html=True)
+
         st.divider()
         st.subheader("🏁 Fat Loss Finisher (Cardio Replacement)")
         st.write("Do this immediately after weights:")
